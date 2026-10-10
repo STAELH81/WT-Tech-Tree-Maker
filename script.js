@@ -5,6 +5,7 @@
 
 const vehicleList = [];
 let branchTitles = {};
+const crossConnections = [];
 const descriptionTemplate =
 		'<h3><em>Year:</em> <strong>XXXX</strong>&nbsp;<em>Development stage:</em>&nbsp;<strong>X</strong></h3>\n\n<p>Historical description...</p>\n\n<h3><em>Primary weapon:</em> <strong>X</strong></h3>\n\n<p>Primary weapon description...</p>\n\n<h3><em>Secondary weapon:</em> <strong>X</strong></h3>\n\n<p>Secondary weapon description...</p>\n\n<h3><em>Other info:</em></h3>\n\n<p>Crew, armor, mobility etc...</p>\n\n<h3><em>Proposed BR:</em> <strong>X.X</strong></h3>\n\n<p>Justification for Battle Rating placement...</p>\n\n<p><em>Links:</em></p>\n\n<ol>\n\t<li>Source 1...</li>\n\t<li>Source 2...</li>\n\t<li>WT forum discussion on the vehicle...</li>\n</ol>\n';
 const classIcons = [
@@ -348,6 +349,7 @@ document.querySelector( '#deleteVehicleButton' ).addEventListener( 'click', () =
 
 		vehicleList.splice( 0, vehicleList.length );
 		newList.forEach( ( item ) => vehicleList.push( item ) );
+		setCrossConnections( crossConnections.filter( link => link.from !== id && link.to !== id ) );
 
 		localStorage.setItem( 'save', JSON.stringify( vehicleList ) );
 		fillEditSelection( vehicleList );
@@ -363,6 +365,7 @@ document.querySelector( '#deleteAllButton' ).addEventListener( 'click', () => {
 		vehicleList.splice( 0, vehicleList.length );
 		document.querySelector( '#techTreeName' ).value = '';
 		CKEDITOR.instances.techTreeMainDesc.setData( '' );
+		crossConnections.splice( 0, crossConnections.length );
 		localStorage.clear();
 
 		const organizedVehicles = organizeTree( vehicleList );
@@ -392,7 +395,7 @@ document.querySelector( '#vehicleOrderList' ).addEventListener( 'click', ( e ) =
 document.querySelector( '#backupDownload' ).addEventListener( 'click', () => {
 	const title = document.querySelector( '#techTreeName' ).value;
 	const description = CKEDITOR.instances.techTreeMainDesc.getData();
-	const content = { title, description, vehicleList, branchTitles, settings };
+	const content = { title, description, vehicleList, branchTitles, settings, crossConnections };
 	const fileName = title.toLowerCase().trim()
 		.replaceAll( ' ', '_' ) + '_backup.json';
 	var file = new Blob( [ JSON.stringify( content ) ], { type: 'application/json' } );
@@ -457,6 +460,7 @@ document.querySelector( '#loadBackup' ).addEventListener( 'click', () => {
 				loadedData.vehicleList.forEach( ( element ) => {
 					vehicleList.push( element );
 				} );
+				setCrossConnections( loadedData.crossConnections );
 				fillEditSelection( vehicleList );
 				drawTree( organizeTree( vehicleList ) );
 				updateVehicleOrderList();
@@ -969,6 +973,7 @@ function drawTree ( organizedVehicles ) {
 	setFillerSizes();
 	addBranchHeaders();
 	fitOverflowingFolder();
+	drawCrossConnections();
 
 	if ( settings.screenshotMode ) {
 		document.querySelectorAll( '.folderTooltipText' ).forEach( ( node ) => {
@@ -1681,6 +1686,11 @@ function init () {
 		} );
 		fillEditSelection( vehicleList );
 		updateVehicleOrderList();
+	}
+	const savedConnections = localStorage.getItem( 'crossConnections' );
+	if ( savedConnections ) {
+		try { setCrossConnections( JSON.parse( savedConnections ) ); }
+		catch ( error ) { setCrossConnections( [] ); }
 	}
 	const techTreeTitle = localStorage.getItem( 'title' );
 	if ( techTreeTitle ) {

@@ -38,6 +38,7 @@
 		<div id="navEdit">Edit vehicle</div>
 		<div id="navDel">Delete vehicle</div>
 		<div id="navOrder">Vehicle ordering</div>
+		<div id="navCrossBranch">Cross-branch connections</div>
 		<div id="navBackup">Backup</div>
 		<div id="navExport">Export tree</div>
 		<div id="navClone">Clone WT Wiki</div>
@@ -379,6 +380,26 @@
 		</div>
 	</div>
 
+	<div id="crossBranchModal" class="modal">
+		<div class="modal-content">
+			<div class="modal-header">
+				<span class="close">&times;</span>
+				<h2>Cross-branch connections</h2>
+			</div>
+			<div class="modal-body">
+				<p>Link any two vehicles, including vehicles in the same rank or in different branches.</p>
+				<p>Existing branch connections still work as before.</p>
+				<div class="crossBranchControls">
+					<label>From vehicle<select id="crossBranchFrom"></select></label>
+					<label>To vehicle<select id="crossBranchTo"></select></label>
+					<button type="button" id="crossBranchAdd">Add connection</button>
+				</div>
+				<h3>Extra connections</h3>
+				<div id="crossBranchList"></div>
+			</div>
+		</div>
+	</div>
+
 	<div id="backupModal" class="modal">
 		<div class="modal-content">
 			<div class="modal-header">
@@ -589,6 +610,7 @@
 	<script src="https://cdn.ckeditor.com/4.16.1/standard/ckeditor.js"></script>
 	<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 	<script src="template.js"></script>
+	<script src="cross-branch.js"></script>
 	<script src="script.js"></script>
 </body>
 

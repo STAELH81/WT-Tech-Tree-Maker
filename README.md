@@ -96,3 +96,9 @@ To download ready version of your project click on the `Export tree` at the menu
 ## Contributing to the tool
 
 I welcome anyone who wishes to help with improving the tool, especially fixing my ugly CSS work.
+
+## Cross-branch connections
+
+This fork adds optional connections between any two vehicles. Open **Cross-branch connections** in the left menu, choose a source and a destination, and click **Add connection**.
+
+Connections can link vehicles within the same rank, across branches, or between ranks. They are saved locally, included in JSON backups and visible in exported HTML. Deleting a vehicle removes its extra connections. All original vehicle fields and branch lines are unchanged.

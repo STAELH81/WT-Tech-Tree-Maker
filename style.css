@@ -717,3 +717,63 @@ footer img {
 	margin-bottom: 3px;
 	width: fit-content;
 }
+
+/* Optional connections between any two vehicle badges. */
+#techTree {
+	position: relative;
+}
+
+#techTree > .crossBranchOverlay {
+	position: absolute;
+	inset: 0;
+	z-index: 2;
+	pointer-events: none;
+	overflow: visible;
+}
+
+.crossBranchPath {
+	fill: none;
+	stroke: #8fa9b3;
+	stroke-width: 3;
+	stroke-linejoin: round;
+	stroke-linecap: round;
+	opacity: 0.95;
+}
+
+#crossBranchModal .modal-body {
+	text-align: center;
+}
+
+.crossBranchControls {
+	display: flex;
+	justify-content: center;
+	align-items: flex-end;
+	flex-wrap: wrap;
+	gap: 12px;
+	margin: 18px 0;
+}
+
+.crossBranchControls label {
+	display: grid;
+	gap: 5px;
+	text-align: left;
+}
+
+.crossBranchControls select {
+	width: 260px;
+	max-width: 80vw;
+	padding: 5px;
+}
+
+.crossBranchRow {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 12px;
+	margin: 4px auto;
+	padding: 9px;
+	max-width: 700px;
+	background-color: rgba(0, 0, 0, .2);
+	border-radius: 4px;
+	text-align: left;
+}

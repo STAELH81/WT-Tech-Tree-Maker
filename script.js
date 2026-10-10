@@ -487,6 +487,11 @@ document.querySelector( '#exportTechTreeButton' ).addEventListener( 'click', () 
 		settings.screenshotMode = true;
 	}
 
+	// Include every connection in exported trees, even when one is selected in the editor.
+	const connectionFocusBeforeExport = focusedCrossConnection;
+	focusedCrossConnection = null;
+	drawCrossConnections();
+
 	// Collecting data
 	const title = document.querySelector( '#techTreeName' ).value;
 	const description = CKEDITOR.instances.techTreeMainDesc.getData();
@@ -516,6 +521,7 @@ document.querySelector( '#exportTechTreeButton' ).addEventListener( 'click', () 
 	};
 
 	// Refreshing the tree
+	focusedCrossConnection = connectionFocusBeforeExport;
 	drawTree( organizeTree( vehicleList ) );
 
 	// Saving the file

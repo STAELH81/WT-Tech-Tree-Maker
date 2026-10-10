@@ -1,5 +1,18 @@
 'use strict';
 
+const crossBranchColors = [ '#e2bf78', '#8bc9d9', '#bcaae2', '#9dc89d', '#df9c89', '#b0c9eb' ];
+let focusedCrossConnection = null;
+
+function crossConnectionKey ( link ) {
+	return link.from + ':' + link.to;
+}
+
+function setCrossConnectionFocus ( key ) {
+	focusedCrossConnection = key;
+	drawCrossConnections();
+}
+
+
 // Extra connections use vehicle IDs, so they stay attached when the tree is reordered.
 function cleanCrossConnections ( links ) {
 	if ( !Array.isArray( links ) ) return [];
@@ -18,6 +31,9 @@ function cleanCrossConnections ( links ) {
 function setCrossConnections ( links ) {
 	const clean = cleanCrossConnections( links );
 	crossConnections.splice( 0, crossConnections.length, ...clean );
+	if ( focusedCrossConnection && !crossConnections.some( link =>
+		crossConnectionKey( link ) === focusedCrossConnection
+	) ) focusedCrossConnection = null;
 	localStorage.setItem( 'crossConnections', JSON.stringify( crossConnections ) );
 }
 
@@ -204,7 +220,7 @@ function findClearRoute ( start, finish, boxes, width, height, usedPaths ) {
 			if ( blocked( a[ 0 ], a[ 1 ], b[ 0 ], b[ 1 ] ) ) continue;
 
 			const segment = Math.abs( b[ 0 ] - a[ 0 ] ) + Math.abs( b[ 1 ] - a[ 1 ] );
-			const overlap = segmentsOverlap( a, b, usedPaths ) ? 30 : 0;
+			const overlap = segmentsOverlap( a, b, usedPaths ) ? 180 : 0;
 			const cost = item.cost + segment + ( item.axis !== axis ? 14 : 0 ) + overlap;
 			const key = encode( ix, iy, axis );
 			if ( cost >= ( distances.get( key ) ?? Infinity ) ) continue;
@@ -235,56 +251,120 @@ function tidyPath ( input ) {
 	return points;
 }
 
+
+function refreshCrossConnectionToolbar () {
+	const bar = document.querySelector( '#crossBranchToolbar' );
+	if ( !bar ) return;
+	bar.hidden = crossConnections.length === 0;
+	const status = document.querySelector( '#crossBranchStatus' );
+	const focusedIndex = crossConnections.findIndex( link => crossConnectionKey( link ) === focusedCrossConnection );
+	if ( focusedIndex < 0 ) {
+		status.textContent = crossConnections.length + ' extra connection' +
+			( crossConnections.length === 1 ? '' : 's' ) + ' (colored)';
+	} else {
+		const link = crossConnections[ focusedIndex ];
+		const from = vehicleList.find( vehicle => vehicle.id === link.from );
+		const to = vehicleList.find( vehicle => vehicle.id === link.to );
+		status.textContent = ( focusedIndex + 1 ) + '/' + crossConnections.length +
+			': ' + ( from?.name || '?' ) + ' → ' + ( to?.name || '?' );
+	}
+	document.querySelector( '#crossBranchAll' ).disabled = focusedIndex < 0;
+}
+
 function drawCrossConnections () {
 	const tree = document.querySelector( '#techTree' );
 	if ( !tree ) return;
 	tree.querySelector( ':scope > .crossBranchOverlay' )?.remove();
+	tree.querySelectorAll( '.crossBranchSource, .crossBranchTarget' ).forEach( badge => {
+		badge.classList.remove( 'crossBranchSource', 'crossBranchTarget' );
+		badge.style.removeProperty( '--crossConnectionColor' );
+	} );
+	refreshCrossConnectionToolbar();
 	if ( !crossConnections.length ) return;
 
 	const root = tree.getBoundingClientRect();
 	if ( !root.width || !root.height ) return;
+
 	const overlay = svgNode( 'svg', {
 		class: 'crossBranchOverlay',
 		width: root.width, height: root.height,
 		viewBox: '0 0 ' + root.width + ' ' + root.height,
 		'aria-hidden': 'true'
 	} );
-
 	const defs = svgNode( 'defs', {} );
-	const marker = svgNode( 'marker', {
-		id: 'crossBranchArrow', markerWidth: '8', markerHeight: '8',
-		refX: '7', refY: '4', orient: 'auto', markerUnits: 'userSpaceOnUse'
-	} );
-	marker.appendChild( svgNode( 'path', {
-		d: 'M 0 0 L 8 4 L 0 8 z', fill: '#8fa9b3'
-	} ) );
-	defs.appendChild( marker );
 	overlay.appendChild( defs );
 
 	const badges = [ ...tree.querySelectorAll( '.vehicleBadge' ) ]
 		.filter( badge => !badge.closest( '.folderTooltipText' ) );
+	const badgeMap = new Map( badges.map( badge => [ badge.id, badge ] ) );
 	const positions = new Map( badges.map( badge => [ badge.id, badgeBounds( badge, root ) ] ) );
 	const boxes = [ ...positions.values() ];
 	const usedPaths = [];
 
-	for ( const link of crossConnections ) {
+	crossConnections.forEach( ( link, index ) => {
+		const key = crossConnectionKey( link );
+		if ( focusedCrossConnection && key !== focusedCrossConnection ) return;
+
 		const from = positions.get( link.from );
 		const to = positions.get( link.to );
-		if ( !from || !to ) continue;
-
+		if ( !from || !to ) return;
 		const points = routeBetweenBadges( from, to, boxes, root.width, root.height, usedPaths );
-		if ( !points ) continue;
+		if ( !points ) return;
 		usedPaths.push( points );
+
+		const color = crossBranchColors[ index % crossBranchColors.length ];
+		const markerId = 'crossBranchArrow' + index;
+		const marker = svgNode( 'marker', {
+			id: markerId, markerWidth: '9', markerHeight: '9',
+			refX: '8', refY: '4.5', orient: 'auto',
+			markerUnits: 'userSpaceOnUse'
+		} );
+		marker.appendChild( svgNode( 'path', {
+			d: 'M 0 0 L 9 4.5 L 0 9 z', fill: color
+		} ) );
+		defs.appendChild( marker );
+
 		const d = points.map( ( point, i ) =>
 			( i ? 'L ' : 'M ' ) +
 			( Math.round( point[ 0 ] * 10 ) / 10 ) + ' ' +
 			( Math.round( point[ 1 ] * 10 ) / 10 )
 		).join( ' ' );
 		overlay.appendChild( svgNode( 'path', {
-			d, class: 'crossBranchPath',
-			'marker-end': 'url(#crossBranchArrow)'
+			d, class: 'crossBranchHalo'
 		} ) );
-	}
+		overlay.appendChild( svgNode( 'path', {
+			d, class: 'crossBranchPath', stroke: color,
+			'marker-end': 'url(#' + markerId + ')'
+		} ) );
+
+		// A small number marks the starting point of each extra connection.
+		const start = points[ 1 ] || points[ 0 ];
+		const label = svgNode( 'g', { class: 'crossBranchStart' } );
+		label.appendChild( svgNode( 'circle', {
+			cx: start[ 0 ], cy: start[ 1 ], r: 8.5,
+			fill: '#1c2b32', stroke: color, 'stroke-width': 2
+		} ) );
+		const text = svgNode( 'text', {
+			x: start[ 0 ], y: start[ 1 ] + 3.1,
+			'text-anchor': 'middle', 'font-size': 10, 'font-weight': 700,
+			fill: '#ffffff'
+		} );
+		text.textContent = index + 1;
+		label.appendChild( text );
+		overlay.appendChild( label );
+
+		if ( focusedCrossConnection ) {
+			const source = badgeMap.get( link.from );
+			const target = badgeMap.get( link.to );
+			for ( const [ badge, className ] of [
+				[ source, 'crossBranchSource' ], [ target, 'crossBranchTarget' ]
+			] ) {
+				if ( !badge ) continue;
+				badge.classList.add( className );
+				badge.style.setProperty( '--crossConnectionColor', color );
+			}
+		}
+	} );
 	tree.appendChild( overlay );
 }
 
@@ -324,15 +404,29 @@ function updateCrossConnectionList () {
 		if ( !from || !to ) continue;
 		const row = document.createElement( 'div' );
 		row.className = 'crossBranchRow';
+		const index = crossConnections.indexOf( link );
+		const color = crossBranchColors[ index % crossBranchColors.length ];
+		const number = document.createElement( 'span' );
+		number.className = 'crossBranchNumber';
+		number.textContent = index + 1;
+		number.style.borderColor = color;
 		const text = document.createElement( 'span' );
+		text.className = 'crossBranchDescription';
 		text.textContent = from.name + ' (rank ' + from.rank + ') → ' +
 			to.name + ' (rank ' + to.rank + ')';
+		const view = document.createElement( 'button' );
+		view.type = 'button';
+		view.textContent = 'View';
+		view.dataset.action = 'view';
+		view.dataset.from = link.from;
+		view.dataset.to = link.to;
 		const remove = document.createElement( 'button' );
 		remove.type = 'button';
 		remove.textContent = 'Remove';
+		remove.dataset.action = 'remove';
 		remove.dataset.from = link.from;
 		remove.dataset.to = link.to;
-		row.append( text, remove );
+		row.append( number, text, view, remove );
 		list.appendChild( row );
 	}
 }
@@ -358,13 +452,28 @@ document.querySelector( '#crossBranchAdd' ).addEventListener( 'click', () => {
 } );
 
 document.querySelector( '#crossBranchList' ).addEventListener( 'click', event => {
-	const remove = event.target.closest( 'button[data-from][data-to]' );
-	if ( !remove ) return;
-	setCrossConnections( crossConnections.filter( link =>
-		link.from !== remove.dataset.from || link.to !== remove.dataset.to
-	) );
+	const button = event.target.closest( 'button[data-action][data-from][data-to]' );
+	if ( !button ) return;
+	const key = button.dataset.from + ':' + button.dataset.to;
+	if ( button.dataset.action === 'view' ) {
+		setCrossConnectionFocus( key );
+		closeModal();
+		return;
+	}
+	setCrossConnections( crossConnections.filter( link => crossConnectionKey( link ) !== key ) );
 	drawCrossConnections();
 	updateCrossConnectionList();
 } );
+
+function cycleCrossConnection ( direction ) {
+	if ( !crossConnections.length ) return;
+	const index = crossConnections.findIndex( link => crossConnectionKey( link ) === focusedCrossConnection );
+	const next = index < 0 ? ( direction > 0 ? 0 : crossConnections.length - 1 ) :
+		( index + direction + crossConnections.length ) % crossConnections.length;
+	setCrossConnectionFocus( crossConnectionKey( crossConnections[ next ] ) );
+}
+document.querySelector( '#crossBranchPrev' ).addEventListener( 'click', () => cycleCrossConnection( -1 ) );
+document.querySelector( '#crossBranchNext' ).addEventListener( 'click', () => cycleCrossConnection( 1 ) );
+document.querySelector( '#crossBranchAll' ).addEventListener( 'click', () => setCrossConnectionFocus( null ) );
 
 window.addEventListener( 'resize', drawCrossConnections );

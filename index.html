@@ -395,6 +395,7 @@
 					<button type="button" id="crossBranchAdd">Add connection</button>
 				</div>
 				<h3>Extra connections</h3>
+				<p>Each color and number matches a line on the tree. Click View to follow one connection.</p>
 				<div id="crossBranchList"></div>
 			</div>
 		</div>
@@ -562,6 +563,13 @@
 
 	<span id="techTreeHint">Hint: You can insert <b class="codeFont">///</b> into branch header to break the
 		line.</span>
+
+	<div id="crossBranchToolbar" class="crossBranchToolbar" hidden>
+		<span id="crossBranchStatus"></span>
+		<button type="button" id="crossBranchPrev" title="Previous connection">Previous</button>
+		<button type="button" id="crossBranchNext" title="Next connection">Next</button>
+		<button type="button" id="crossBranchAll" title="Display every connection">Show all</button>
+	</div>
 
 	<div id="techTreeWrapper">
 		<div id="techTree"></div>

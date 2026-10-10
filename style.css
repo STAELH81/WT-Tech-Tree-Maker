@@ -731,13 +731,21 @@ footer img {
 	overflow: visible;
 }
 
+.crossBranchHalo {
+	fill: none;
+	stroke: #17252c;
+	stroke-width: 6;
+	stroke-linejoin: round;
+	stroke-linecap: round;
+	opacity: .95;
+}
+
 .crossBranchPath {
 	fill: none;
-	stroke: #8fa9b3;
 	stroke-width: 3;
 	stroke-linejoin: round;
 	stroke-linecap: round;
-	opacity: 0.95;
+	opacity: 1;
 }
 
 #crossBranchModal .modal-body {
@@ -786,4 +794,92 @@ footer img {
 
 #techTree .folderTooltipText {
 	z-index: 3;
+}
+
+.crossBranchToolbar[hidden] {
+	display: none;
+}
+
+.crossBranchToolbar {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	margin: 8px auto 10px;
+	font-size: 13px;
+}
+
+#crossBranchStatus {
+	min-width: 180px;
+	text-align: center;
+}
+
+.crossBranchToolbar button {
+	padding: 4px 8px;
+	cursor: pointer;
+	color: white;
+	background: #284850;
+	border: 1px solid #66848b;
+	border-radius: 3px;
+}
+
+.crossBranchToolbar button:disabled {
+	opacity: .45;
+	cursor: default;
+}
+
+.crossBranchNumber {
+	display: inline-flex;
+	flex: 0 0 24px;
+	width: 24px;
+	height: 24px;
+	border-radius: 50%;
+	align-items: center;
+	justify-content: center;
+	border: 2px solid;
+	background: #1c2b32;
+	font-size: 12px;
+	font-weight: bold;
+}
+
+.crossBranchDescription {
+	flex: 1;
+	min-width: 160px;
+}
+
+.crossBranchRow button {
+	cursor: pointer;
+}
+
+#techTree .crossBranchSource {
+	outline: 3px solid var(--crossConnectionColor);
+	outline-offset: 2px;
+}
+
+#techTree .crossBranchTarget {
+	outline: 3px solid var(--crossConnectionColor);
+	outline-offset: 2px;
+}
+
+#techTree .crossBranchSource::after,
+#techTree .crossBranchTarget::after {
+	position: absolute;
+	top: -19px;
+	right: -1px;
+	background: #1c2b32;
+	color: white;
+	border: 1px solid var(--crossConnectionColor);
+	padding: 1px 4px;
+	font-size: 10px;
+	font-weight: bold;
+	z-index: 3;
+}
+
+#techTree .crossBranchSource::after {
+	content: 'FROM';
+}
+
+#techTree .crossBranchTarget::after {
+	content: 'TO';
 }

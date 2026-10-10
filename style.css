@@ -726,7 +726,7 @@ footer img {
 #techTree > .crossBranchOverlay {
 	position: absolute;
 	inset: 0;
-	z-index: 2;
+	z-index: 1;
 	pointer-events: none;
 	overflow: visible;
 }
@@ -776,4 +776,14 @@ footer img {
 	background-color: rgba(0, 0, 0, .2);
 	border-radius: 4px;
 	text-align: left;
+}
+
+/* Keep lines behind badges while allowing folders to open over the tree. */
+#techTree .vehicleBadge {
+	position: relative;
+	z-index: 2;
+}
+
+#techTree .folderTooltipText {
+	z-index: 3;
 }

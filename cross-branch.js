@@ -29,10 +29,210 @@ function svgNode ( tag, attributes ) {
 	return element;
 }
 
-function findTreeBadge ( id ) {
-	return [ ...document.querySelectorAll( '#techTree .vehicleBadge' ) ].find( badge =>
-		badge.id === id && !badge.closest( '.folderTooltipText' )
-	);
+
+function badgeBounds ( badge, root ) {
+	const rect = badge.getBoundingClientRect();
+	return {
+		left: rect.left - root.left, right: rect.right - root.left,
+		top: rect.top - root.top, bottom: rect.bottom - root.top,
+		x: ( rect.left + rect.right ) / 2 - root.left,
+		y: ( rect.top + rect.bottom ) / 2 - root.top
+	};
+}
+
+function connectionPort ( box, side ) {
+	const horizontal = side === 'left' || side === 'right';
+	const direction = side === 'right' || side === 'bottom' ? 1 : -1;
+	const edge = box[ side ];
+	return horizontal ? {
+		x: edge + direction * 11, y: box.y,
+		endX: edge + direction * 3, endY: box.y, axis: 1
+	} : {
+		x: box.x, y: edge + direction * 11,
+		endX: box.x, endY: edge + direction * 3, axis: 2
+	};
+}
+
+// Keep the first and last segments anchored to the vehicle edges.
+function routeBetweenBadges ( from, to, boxes, width, height, usedPaths ) {
+	const dx = to.x - from.x;
+	const dy = to.y - from.y;
+	const horizontal = dx >= 0 ? [ 'right', 'left' ] : [ 'left', 'right' ];
+	const vertical = dy >= 0 ? [ 'bottom', 'top' ] : [ 'top', 'bottom' ];
+	const choices = Math.abs( dx ) > 60 && Math.abs( dy ) < 110 ?
+		[ horizontal, vertical ] : Math.abs( dy ) > Math.abs( dx ) * 1.4 ?
+		[ vertical, horizontal ] : [ horizontal, vertical ];
+
+	let best = null;
+	for ( const pair of choices ) {
+		const start = connectionPort( from, pair[ 0 ] );
+		const finish = connectionPort( to, pair[ 1 ] );
+		const result = findClearRoute( start, finish, boxes, width, height, usedPaths );
+		if ( !result ) continue;
+
+		const score = result.score + ( pair === choices[ 0 ] ? 0 : 25 );
+		if ( !best || score < best.score ) {
+			best = { score, points: [
+				[ start.endX, start.endY ], ...result.points, [ finish.endX, finish.endY ]
+			] };
+		}
+	}
+	return best ? tidyPath( best.points ) : null;
+}
+
+function segmentsOverlap ( a, b, previousPaths ) {
+	for ( const path of previousPaths ) {
+		for ( let i = 1; i < path.length; i++ ) {
+			const c = path[ i - 1 ];
+			const d = path[ i ];
+			if ( a[ 0 ] === b[ 0 ] && c[ 0 ] === d[ 0 ] && a[ 0 ] === c[ 0 ] &&
+				Math.max( Math.min( a[ 1 ], b[ 1 ] ), Math.min( c[ 1 ], d[ 1 ] ) ) <
+				Math.min( Math.max( a[ 1 ], b[ 1 ] ), Math.max( c[ 1 ], d[ 1 ] ) ) ) return true;
+			if ( a[ 1 ] === b[ 1 ] && c[ 1 ] === d[ 1 ] && a[ 1 ] === c[ 1 ] &&
+				Math.max( Math.min( a[ 0 ], b[ 0 ] ), Math.min( c[ 0 ], d[ 0 ] ) ) <
+				Math.min( Math.max( a[ 0 ], b[ 0 ] ), Math.max( c[ 0 ], d[ 0 ] ) ) ) return true;
+		}
+	}
+	return false;
+}
+
+// Find a short right-angled route through the gaps between vehicle badges.
+function findClearRoute ( start, finish, boxes, width, height, usedPaths ) {
+	const clearance = 9;
+	const minX = Math.max( 1, Math.min( start.x, finish.x ) - 85 );
+	const maxX = Math.min( width - 1, Math.max( start.x, finish.x ) + 85 );
+	const minY = Math.max( 1, Math.min( start.y, finish.y ) - 85 );
+	const maxY = Math.min( height - 1, Math.max( start.y, finish.y ) + 85 );
+
+	const obstacles = boxes.filter( box =>
+		box.right + clearance >= minX && box.left - clearance <= maxX &&
+		box.bottom + clearance >= minY && box.top - clearance <= maxY
+	).map( box => ( {
+		left: box.left - clearance, right: box.right + clearance,
+		top: box.top - clearance, bottom: box.bottom + clearance
+	} ) );
+
+	const xs = new Set( [ start.x, finish.x, minX, maxX ] );
+	const ys = new Set( [ start.y, finish.y, minY, maxY ] );
+	for ( const box of obstacles ) {
+		if ( box.left > minX && box.left < maxX ) xs.add( box.left );
+		if ( box.right > minX && box.right < maxX ) xs.add( box.right );
+		if ( box.top > minY && box.top < maxY ) ys.add( box.top );
+		if ( box.bottom > minY && box.bottom < maxY ) ys.add( box.bottom );
+	}
+	const x = [ ...xs ].sort( ( a, b ) => a - b );
+	const y = [ ...ys ].sort( ( a, b ) => a - b );
+	if ( x.length * y.length > 100000 ) return null;
+	const nx = x.length;
+	const sx = x.indexOf( start.x ), sy = y.indexOf( start.y );
+	const tx = x.indexOf( finish.x ), ty = y.indexOf( finish.y );
+	if ( sx < 0 || sy < 0 || tx < 0 || ty < 0 ) return null;
+
+	function blocked ( x1, y1, x2, y2 ) {
+		for ( const box of obstacles ) {
+			if ( x1 === x2 ) {
+				if ( x1 > box.left && x1 < box.right &&
+					Math.max( y1, y2 ) > box.top && Math.min( y1, y2 ) < box.bottom ) return true;
+			} else if ( y1 > box.top && y1 < box.bottom &&
+				Math.max( x1, x2 ) > box.left && Math.min( x1, x2 ) < box.right ) return true;
+		}
+		return false;
+	}
+
+	const encode = ( ix, iy, axis ) => ( iy * nx + ix ) * 3 + axis;
+	const firstKey = encode( sx, sy, start.axis );
+	const distances = new Map( [ [ firstKey, 0 ] ] );
+	const previous = new Map();
+	const heap = [];
+
+	function push ( item ) {
+		heap.push( item );
+		let i = heap.length - 1;
+		while ( i > 0 ) {
+			const p = ( i - 1 ) >> 1;
+			if ( heap[ p ].priority <= item.priority ) break;
+			heap[ i ] = heap[ p ];
+			i = p;
+		}
+		heap[ i ] = item;
+	}
+	function pop () {
+		const first = heap[ 0 ];
+		const last = heap.pop();
+		if ( heap.length ) {
+			let i = 0;
+			while ( 2 * i + 1 < heap.length ) {
+				let child = i * 2 + 1;
+				if ( child + 1 < heap.length && heap[ child + 1 ].priority < heap[ child ].priority ) child++;
+				if ( heap[ child ].priority >= last.priority ) break;
+				heap[ i ] = heap[ child ];
+				i = child;
+			}
+			heap[ i ] = last;
+		}
+		return first;
+	}
+
+	push( {
+		key: firstKey, ix: sx, iy: sy, axis: start.axis, cost: 0,
+		priority: Math.abs( start.x - finish.x ) + Math.abs( start.y - finish.y )
+	} );
+
+	while ( heap.length ) {
+		const item = pop();
+		if ( distances.get( item.key ) !== item.cost ) continue;
+
+		if ( item.ix === tx && item.iy === ty ) {
+			let key = item.key;
+			const points = [];
+			while ( key !== undefined ) {
+				const node = Math.floor( key / 3 );
+				points.push( [ x[ node % nx ], y[ Math.floor( node / nx ) ] ] );
+				key = previous.get( key );
+			}
+			points.reverse();
+			return { points, score: item.cost + ( item.axis !== finish.axis ? 10 : 0 ) };
+		}
+
+		for ( const [ ix, iy, axis ] of [
+			[ item.ix - 1, item.iy, 1 ], [ item.ix + 1, item.iy, 1 ],
+			[ item.ix, item.iy - 1, 2 ], [ item.ix, item.iy + 1, 2 ]
+		] ) {
+			if ( ix < 0 || ix >= x.length || iy < 0 || iy >= y.length ) continue;
+			const a = [ x[ item.ix ], y[ item.iy ] ];
+			const b = [ x[ ix ], y[ iy ] ];
+			if ( blocked( a[ 0 ], a[ 1 ], b[ 0 ], b[ 1 ] ) ) continue;
+
+			const segment = Math.abs( b[ 0 ] - a[ 0 ] ) + Math.abs( b[ 1 ] - a[ 1 ] );
+			const overlap = segmentsOverlap( a, b, usedPaths ) ? 30 : 0;
+			const cost = item.cost + segment + ( item.axis !== axis ? 14 : 0 ) + overlap;
+			const key = encode( ix, iy, axis );
+			if ( cost >= ( distances.get( key ) ?? Infinity ) ) continue;
+			distances.set( key, cost );
+			previous.set( key, item.key );
+			push( {
+				key, ix, iy, axis, cost,
+				priority: cost + Math.abs( b[ 0 ] - finish.x ) + Math.abs( b[ 1 ] - finish.y )
+			} );
+		}
+	}
+	return null;
+}
+
+function tidyPath ( input ) {
+	const points = [];
+	for ( const point of input ) {
+		if ( points.length && points[ points.length - 1 ][ 0 ] === point[ 0 ] &&
+			points[ points.length - 1 ][ 1 ] === point[ 1 ] ) continue;
+		points.push( point );
+		while ( points.length >= 3 ) {
+			const [ a, b, c ] = points.slice( -3 );
+			if ( a[ 0 ] === b[ 0 ] && b[ 0 ] === c[ 0 ] ||
+				a[ 1 ] === b[ 1 ] && b[ 1 ] === c[ 1 ] ) points.splice( -2, 1 );
+			else break;
+		}
+	}
+	return points;
 }
 
 function drawCrossConnections () {
@@ -41,74 +241,47 @@ function drawCrossConnections () {
 	tree.querySelector( ':scope > .crossBranchOverlay' )?.remove();
 	if ( !crossConnections.length ) return;
 
-	const treeRect = tree.getBoundingClientRect();
-	if ( !treeRect.width || !treeRect.height ) return;
-
+	const root = tree.getBoundingClientRect();
+	if ( !root.width || !root.height ) return;
 	const overlay = svgNode( 'svg', {
 		class: 'crossBranchOverlay',
-		width: treeRect.width,
-		height: treeRect.height,
-		viewBox: '0 0 ' + treeRect.width + ' ' + treeRect.height,
+		width: root.width, height: root.height,
+		viewBox: '0 0 ' + root.width + ' ' + root.height,
 		'aria-hidden': 'true'
 	} );
+
 	const defs = svgNode( 'defs', {} );
 	const marker = svgNode( 'marker', {
-		id: 'crossBranchArrow',
-		markerWidth: '9', markerHeight: '9',
-		refX: '7', refY: '4.5',
-		orient: 'auto', markerUnits: 'userSpaceOnUse'
+		id: 'crossBranchArrow', markerWidth: '8', markerHeight: '8',
+		refX: '7', refY: '4', orient: 'auto', markerUnits: 'userSpaceOnUse'
 	} );
-	marker.appendChild( svgNode( 'path', { d: 'M 0 0 L 9 4.5 L 0 9 z', fill: '#8fa9b3' } ) );
+	marker.appendChild( svgNode( 'path', {
+		d: 'M 0 0 L 8 4 L 0 8 z', fill: '#8fa9b3'
+	} ) );
 	defs.appendChild( marker );
 	overlay.appendChild( defs );
 
-	function position ( node ) {
-		const rect = node.getBoundingClientRect();
-		return {
-			left: rect.left - treeRect.left, right: rect.right - treeRect.left,
-			top: rect.top - treeRect.top, bottom: rect.bottom - treeRect.top,
-			x: ( rect.left + rect.right ) / 2 - treeRect.left,
-			y: ( rect.top + rect.bottom ) / 2 - treeRect.top
-		};
-	}
+	const badges = [ ...tree.querySelectorAll( '.vehicleBadge' ) ]
+		.filter( badge => !badge.closest( '.folderTooltipText' ) );
+	const positions = new Map( badges.map( badge => [ badge.id, badgeBounds( badge, root ) ] ) );
+	const boxes = [ ...positions.values() ];
+	const usedPaths = [];
 
 	for ( const link of crossConnections ) {
-		const first = findTreeBadge( link.from );
-		const second = findTreeBadge( link.to );
-		if ( !first || !second ) continue;
-		const a = position( first );
-		const b = position( second );
-		const sameRank = first.closest( '.rank' ) === second.closest( '.rank' );
-		let path;
+		const from = positions.get( link.from );
+		const to = positions.get( link.to );
+		if ( !from || !to ) continue;
 
-		if ( sameRank && Math.abs( a.x - b.x ) > 40 ) {
-			const right = b.x > a.x;
-			const start = right ? a.right + 2 : a.left - 2;
-			const end = right ? b.left - 5 : b.right + 5;
-
-			if ( Math.abs( a.x - b.x ) < 210 ) {
-				const middle = ( start + end ) / 2;
-				path = 'M ' + start + ' ' + a.y + ' H ' + middle +
-					' V ' + b.y + ' H ' + end;
-			} else {
-				const rank = position( first.closest( '.rank' ) );
-				const lane = Math.max( rank.top + 5, Math.min( a.top, b.top ) - 10 );
-				const exit = start + ( right ? 12 : -12 );
-				path = 'M ' + start + ' ' + a.y + ' H ' + exit +
-					' V ' + lane + ' H ' + b.x + ' V ' + ( b.top - 5 );
-			}
-		} else if ( b.y >= a.y ) {
-			const middle = ( a.bottom + b.top ) / 2;
-			path = 'M ' + a.x + ' ' + ( a.bottom + 2 ) + ' V ' + middle +
-				' H ' + b.x + ' V ' + ( b.top - 5 );
-		} else {
-			const middle = ( a.top + b.bottom ) / 2;
-			path = 'M ' + a.x + ' ' + ( a.top - 2 ) + ' V ' + middle +
-				' H ' + b.x + ' V ' + ( b.bottom + 5 );
-		}
-
+		const points = routeBetweenBadges( from, to, boxes, root.width, root.height, usedPaths );
+		if ( !points ) continue;
+		usedPaths.push( points );
+		const d = points.map( ( point, i ) =>
+			( i ? 'L ' : 'M ' ) +
+			( Math.round( point[ 0 ] * 10 ) / 10 ) + ' ' +
+			( Math.round( point[ 1 ] * 10 ) / 10 )
+		).join( ' ' );
 		overlay.appendChild( svgNode( 'path', {
-			d: path, class: 'crossBranchPath',
+			d, class: 'crossBranchPath',
 			'marker-end': 'url(#crossBranchArrow)'
 		} ) );
 	}
